@@ -7,6 +7,12 @@ import streamlit as st
 from databricks import sql
 from databricks.sdk.core import Config
 
+# ---------- environment detection ----------
+# Inside a Databricks App the platform injects DATABRICKS_CLIENT_ID for the
+# app's service principal (ambient auth). Anywhere else (e.g. Streamlit
+# Community Cloud) we authenticate with a PAT read from st.secrets.
+IN_DATABRICKS = bool(os.getenv("DATABRICKS_CLIENT_ID"))
+
 # ---------- config ----------
 VERDICTS = "workspace.default.facility_verdicts"
 FACILITIES = "databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.facilities"
@@ -194,24 +200,39 @@ div[data-testid="stDeckGlJsonChart"] {
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- db helpers (Delta via SQL warehouse) ----------
-cfg = Config()
+# ---------- auth helpers (every Databricks call site goes through these) ----------
+def get_workspace_client():
+    """Ambient service-principal auth inside a Databricks App; PAT from
+    st.secrets everywhere else. Never touches st.secrets inside Databricks."""
+    from databricks.sdk import WorkspaceClient
+    if IN_DATABRICKS:
+        return WorkspaceClient()
+    return WorkspaceClient(host=st.secrets["DATABRICKS_HOST"],
+                           token=st.secrets["DATABRICKS_TOKEN"])
 
-def get_conn():
+def get_sql_connection():
+    if IN_DATABRICKS:
+        cfg = Config()
+        return sql.connect(
+            server_hostname=cfg.host,
+            http_path=f"/sql/1.0/warehouses/{os.getenv('DATABRICKS_WAREHOUSE_ID')}",
+            credentials_provider=lambda: cfg.authenticate,
+        )
     return sql.connect(
-        server_hostname=cfg.host,
-        http_path=f"/sql/1.0/warehouses/{os.getenv('DATABRICKS_WAREHOUSE_ID')}",
-        credentials_provider=lambda: cfg.authenticate,
+        server_hostname=st.secrets["DATABRICKS_HOST"].replace("https://", ""),
+        http_path=st.secrets["DATABRICKS_HTTP_PATH"],
+        access_token=st.secrets["DATABRICKS_TOKEN"],
     )
 
+# ---------- db helpers (Delta via SQL warehouse) ----------
 @st.cache_data(ttl=600)
 def q(query: str) -> pd.DataFrame:
-    with get_conn() as c, c.cursor() as cur:
+    with get_sql_connection() as c, c.cursor() as cur:
         cur.execute(query)
         return cur.fetchall_arrow().to_pandas()
 
 def exec_sql(query: str, params=None):
-    with get_conn() as c, c.cursor() as cur:
+    with get_sql_connection() as c, c.cursor() as cur:
         cur.execute(query, params or {})
 
 def ensure_overrides_table():
@@ -227,10 +248,9 @@ def _lakebase_conn():
     Note: generate_database_credential is for old-style Database Instances
     and fails against projects-style Lakebase."""
     import psycopg2
-    from databricks.sdk import WorkspaceClient
     if not LAKEBASE_HOST:
         raise RuntimeError("LAKEBASE_HOST not configured")
-    w = WorkspaceClient()
+    w = get_workspace_client()
     token = w.config.oauth_token().access_token
     return psycopg2.connect(
         host=LAKEBASE_HOST, port=5432, dbname="databricks_postgres",
@@ -246,51 +266,55 @@ def _lakebase_ensure_table(pg):
 
 def save_override(uid: str, cap_key: str, original: str, new_v: str, note: str) -> str:
     """Write the planner's review. Lakebase first (rubric-native transactional store);
-    Delta table as the kill-switch fallback. Returns which store accepted the write."""
-    try:
-        pg = _lakebase_conn()
+    Delta table as the kill-switch fallback. Returns which store accepted the write.
+    Outside Databricks the OAuth-token trick can't work, so Lakebase is skipped
+    entirely and Delta is the primary store, not a fallback."""
+    if IN_DATABRICKS:
         try:
-            _lakebase_ensure_table(pg)
-            with pg.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO planner_overrides (unique_id, capability, original_verdict, new_verdict, note) "
-                    "VALUES (%s, %s, %s, %s, %s)",
-                    (uid, cap_key, original, new_v, note or ""))
-            pg.commit()
-            return "Lakebase"
-        finally:
-            pg.close()
-    except Exception as e:
-        print(f"[Lakebase save failed] {type(e).__name__}: {e}")
+            pg = _lakebase_conn()
+            try:
+                _lakebase_ensure_table(pg)
+                with pg.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO planner_overrides (unique_id, capability, original_verdict, new_verdict, note) "
+                        "VALUES (%s, %s, %s, %s, %s)",
+                        (uid, cap_key, original, new_v, note or ""))
+                pg.commit()
+                return "Lakebase"
+            finally:
+                pg.close()
+        except Exception as e:
+            print(f"[Lakebase save failed] {type(e).__name__}: {e}")
 
     ensure_overrides_table()
     safe_note = (note or "").replace("'", "''")
     exec_sql(f"""INSERT INTO {OVERRIDES} VALUES (
         '{uid}', '{cap_key}', '{original}', '{new_v}', '{safe_note}', current_timestamp())""")
-    return "Delta (fallback)"
+    return "Delta (fallback)" if IN_DATABRICKS else "Delta"
 
 def load_overrides() -> tuple:
-    """Read saved reviews - Lakebase first, Delta fallback. Returns (df, source)."""
-    try:
-        pg = _lakebase_conn()
+    """Read saved reviews - Lakebase first, Delta fallback. Returns (df, source).
+    Lakebase is only reachable inside Databricks; external runs go straight to Delta."""
+    if IN_DATABRICKS:
         try:
-            _lakebase_ensure_table(pg)
-            ov = pd.read_sql("SELECT * FROM planner_overrides ORDER BY created_at DESC LIMIT 50", pg)
-            return ov, "Lakebase"
-        finally:
-            pg.close()
-    except Exception as e:
-        print(f"[Lakebase load failed] {type(e).__name__}: {e}")
+            pg = _lakebase_conn()
+            try:
+                _lakebase_ensure_table(pg)
+                ov = pd.read_sql("SELECT * FROM planner_overrides ORDER BY created_at DESC LIMIT 50", pg)
+                return ov, "Lakebase"
+            finally:
+                pg.close()
+        except Exception as e:
+            print(f"[Lakebase load failed] {type(e).__name__}: {e}")
     ov = q(f"SELECT * FROM {OVERRIDES} ORDER BY created_at DESC LIMIT 50")
-    return ov, "Delta (fallback)"
+    return ov, "Delta (fallback)" if IN_DATABRICKS else "Delta"
 
 # ---------- Tier 2: LLM receipts (on-demand, cached) ----------
 def _call_llm(prompt: str) -> str:
-    """Databricks Foundation Model serving first (ambient service-principal auth,
-    no API key); OpenAI as the kill-switch fallback so a live demo never dies."""
+    """Databricks Foundation Model serving first (ambient auth inside Databricks,
+    PAT via st.secrets outside); OpenAI as the kill-switch fallback so a live demo never dies."""
     try:
-        from databricks.sdk import WorkspaceClient
-        db_client = WorkspaceClient().serving_endpoints.get_open_ai_client()
+        db_client = get_workspace_client().serving_endpoints.get_open_ai_client()
         resp = db_client.chat.completions.create(
             model=SERVING_ENDPOINT,
             max_tokens=250,
@@ -337,9 +361,18 @@ def get_receipt(uid: str, cap_key: str, verdict: str, det: pd.Series) -> str:
     return receipt
 
 # ---------- Mosaic AI Vector Search (semantic retrieval - additive only) ----------
-def semantic_search(query_text: str, k: int = 5) -> pd.DataFrame:
+def get_vector_search_client():
+    """Same split as get_workspace_client: ambient inside Databricks, PAT outside."""
     from databricks.vector_search.client import VectorSearchClient
-    vsc = VectorSearchClient(disable_notice=True)
+    if IN_DATABRICKS:
+        return VectorSearchClient(disable_notice=True)
+    return VectorSearchClient(
+        workspace_url=st.secrets["DATABRICKS_HOST"],
+        personal_access_token=st.secrets["DATABRICKS_TOKEN"],
+        disable_notice=True)
+
+def semantic_search(query_text: str, k: int = 5) -> pd.DataFrame:
+    vsc = get_vector_search_client()
     idx = vsc.get_index(endpoint_name=VS_ENDPOINT, index_name=VS_INDEX)
     res = idx.similarity_search(
         query_text=query_text,
