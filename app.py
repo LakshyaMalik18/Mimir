@@ -33,79 +33,164 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
 
-/* hide streamlit chrome */
-#MainMenu, footer, header {visibility: hidden;}
-.block-container {padding-top: 1.6rem; max-width: 1150px;}
+/* ========= MIMIR design tokens =========
+   base #0A0908 · surface rgba(255,255,255,.03) · hairline rgba(224,168,46,.16)
+   text #F5F1E8 / muted #9A948A · gold #F4C95D / #E0A82E / #B8860B / #F7E7CE */
+
+/* hide streamlit chrome, let the hero sit high */
+#MainMenu, footer {visibility: hidden;}
+[data-testid="stHeader"] {background: transparent !important;}
+[data-testid="stHeader"] * {background: transparent;}
+.block-container {padding-top: 2.2rem; padding-bottom: 4rem; max-width: 1180px;}
+
+/* app canvas: warm near-black, radial gold glow behind the hero, soft vignette */
+.stApp {
+  background:
+    radial-gradient(ellipse 55% 34% at 28% -6%, rgba(244,201,93,0.14), rgba(224,168,46,0.05) 45%, transparent 70%),
+    radial-gradient(ellipse 80% 60% at 50% 45%, transparent 55%, rgba(0,0,0,0.38) 100%),
+    #0A0908;
+  background-attachment: fixed;
+}
+/* faint grain for depth */
+.stApp::after {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
 
 /* type system */
-html, body, [class*="css"] {font-family: 'Inter', sans-serif;}
-h1, h2, h3 {font-family: 'Space Grotesk', sans-serif !important; letter-spacing: -0.02em;}
+html, body, [class*="css"] {font-family: 'Inter', sans-serif; color: #F5F1E8;}
+h1, h2, h3 {font-family: 'Space Grotesk', sans-serif !important; letter-spacing: -0.02em; color: #F5F1E8;}
+[data-testid="stCaptionContainer"], .stCaption, small {color: #9A948A !important;}
 
 /* ---- Mimir hero ---- */
-.mimir-hero {display: flex; align-items: center; gap: 18px; margin-bottom: 4px;}
+.mimir-stage {padding: 0.6rem 0 0.4rem 0;}
+.mimir-hero {display: flex; align-items: center; gap: 20px; margin-bottom: 6px;}
 .mimir-well {
-  width: 52px; height: 52px; border-radius: 50%; flex: 0 0 52px;
-  background: radial-gradient(circle at 35% 30%, #0e1117 28%, transparent 30%),
-              conic-gradient(from 210deg, #2dd4a7, #4aa8d8, #e6b34d, #2dd4a7);
-  box-shadow: 0 0 24px rgba(45, 212, 167, 0.35), inset 0 0 12px rgba(0,0,0,0.6);
+  width: 58px; height: 58px; border-radius: 50%; flex: 0 0 58px;
+  background: radial-gradient(circle at 35% 30%, #0A0908 28%, transparent 30%),
+              conic-gradient(from 210deg, #F4C95D, #B8860B, #F7E7CE, #E0A82E, #F4C95D);
+  box-shadow: 0 0 28px rgba(224,168,46,0.38), 0 0 64px rgba(244,201,93,0.14), inset 0 0 12px rgba(0,0,0,0.6);
 }
 .mimir-name {
-  font-family: 'Space Grotesk', sans-serif; font-size: 2.6rem; font-weight: 700;
-  letter-spacing: 0.04em; line-height: 1;
-  background: linear-gradient(90deg, #e8ecf3, #9fd8c6);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  font-family: 'Space Grotesk', sans-serif; font-size: 3.1rem; font-weight: 700;
+  letter-spacing: 0.05em; line-height: 1;
+  background: linear-gradient(100deg, #F7E7CE 0%, #F4C95D 42%, #E0A82E 70%, #B8860B 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
 }
-.mimir-tag {color: #8b94a7; font-size: 0.95rem; letter-spacing: 0.14em;
-  text-transform: uppercase; margin-top: 6px; font-weight: 500;}
-.mimir-sub {color: #9aa3b2; font-size: 1.02rem; margin: 10px 0 4px 0;}
+.mimir-tag {color: #9A948A; font-size: 0.92rem; letter-spacing: 0.22em;
+  text-transform: uppercase; margin-top: 8px; font-weight: 500;}
+.mimir-sub {color: #9A948A; font-size: 1.02rem; line-height: 1.6; margin: 14px 0 6px 0; max-width: 62rem;}
 
-/* metric cards */
+/* ---- summary stat cards + verdict pills (status palette, never gold) ---- */
+.stat-card {
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(224,168,46,0.16);
+  border-radius: 14px; padding: 18px 20px 16px 20px;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.stat-num {font-family: 'Space Grotesk', sans-serif; font-size: 2.35rem; font-weight: 600;
+  color: #F5F1E8; line-height: 1.15; margin-top: 10px;}
+.stat-sub {color: #9A948A; font-size: 0.8rem; margin-top: 2px;}
+.pill {display: inline-block; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.09em;
+  text-transform: uppercase; padding: 4px 12px; border-radius: 999px; line-height: 1.4;}
+.pill-emerald {background: #17B877; color: #05261A;}
+.pill-slate   {background: #6B7686; color: #10151D;}
+.pill-red     {background: #E5484D; color: #2B0709;}
+
+/* metric cards (kept on-theme for any st.metric) */
 div[data-testid="stMetric"] {
-  background: linear-gradient(180deg, #171c26, #131822); border: 1px solid #262d3b;
-  border-radius: 14px; padding: 14px 18px;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(224,168,46,0.16);
+  border-radius: 14px; padding: 16px 18px;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
 div[data-testid="stMetricValue"] {font-family: 'Space Grotesk', sans-serif; font-size: 2rem;}
 
-/* expander rows as cards */
+/* expander rows as glass cards */
 div[data-testid="stExpander"] {
-  background: #161b24; border: 1px solid #262d3b !important; border-radius: 14px !important;
-  margin-bottom: 10px; transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease;
+  background: rgba(255,255,255,0.03) !important;
+  border: 1px solid rgba(224,168,46,0.16) !important; border-radius: 14px !important;
+  margin-bottom: 12px;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
 }
 div[data-testid="stExpander"]:hover {
-  border-color: #3a4a5c !important;
-  transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  border-color: rgba(224,168,46,0.38) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.45), 0 0 18px rgba(224,168,46,0.07), inset 0 1px 0 rgba(255,255,255,0.05);
 }
-div[data-testid="stExpander"] summary {font-size: 0.95rem; padding: 14px 16px;}
-div[data-testid="stExpander"] summary:hover {color: #2dd4a7;}
+div[data-testid="stExpander"] details {border: none !important; background: transparent !important;}
+div[data-testid="stExpander"] summary {font-size: 0.95rem; padding: 15px 18px; color: #F5F1E8;}
+div[data-testid="stExpander"] summary:hover {color: #F4C95D;}
 
-/* buttons */
+/* buttons: gold gradient primary, dark text, soft glow */
 .stButton > button {
-  border-radius: 10px; border: 1px solid #2dd4a7; color: #2dd4a7; background: transparent;
-  font-family: 'Inter', sans-serif; font-weight: 500; transition: all .15s;
+  border-radius: 10px; border: 1px solid rgba(224,168,46,0.45);
+  background: linear-gradient(135deg, #F4C95D 0%, #E0A82E 55%, #B8860B 100%);
+  color: #1A1207; font-family: 'Inter', sans-serif; font-weight: 600;
+  transition: all .15s ease; box-shadow: 0 1px 10px rgba(224,168,46,0.16);
 }
-.stButton > button:hover {background: #2dd4a7; color: #0e1117; border-color: #2dd4a7;
-  box-shadow: 0 0 16px rgba(45, 212, 167, 0.35);}
+.stButton > button:hover {
+  border-color: #F4C95D; color: #0A0908; transform: translateY(-1px);
+  box-shadow: 0 0 22px rgba(244,201,93,0.42), 0 4px 14px rgba(0,0,0,0.35);
+}
+.stButton > button:active {transform: translateY(0);}
+.stButton > button:focus:not(:active) {border-color: #F4C95D; color: #1A1207;}
 
-/* progress bar */
-div[data-testid="stProgress"] > div > div {background: linear-gradient(90deg, #2dd4a7, #4aa8d8);}
+/* progress bar: gold ramp on a dark track */
+div[data-testid="stProgress"] > div > div {background: linear-gradient(90deg, #F4C95D, #B8860B); border-radius: 999px;}
+div[data-testid="stProgress"] > div {background: rgba(255,255,255,0.06); border-radius: 999px;}
 
-/* tables */
-div[data-testid="stTable"] table {font-size: 0.85rem;}
-div[data-testid="stTable"] td, div[data-testid="stTable"] th {padding: 6px 10px;}
+/* tables: hairline grid on glass */
+div[data-testid="stTable"] table {font-size: 0.85rem; border-collapse: collapse;}
+div[data-testid="stTable"] td, div[data-testid="stTable"] th {
+  padding: 7px 12px; border-color: rgba(255,255,255,0.07) !important;}
+div[data-testid="stTable"] th {
+  color: #9A948A !important; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
+  background: rgba(255,255,255,0.02);}
+div[data-testid="stTable"] {border: 1px solid rgba(224,168,46,0.14); border-radius: 12px; overflow: hidden;}
 
-/* selects */
-div[data-baseweb="select"] > div {border-radius: 10px;}
+/* dataframe container */
+div[data-testid="stDataFrame"] {
+  border: 1px solid rgba(224,168,46,0.16); border-radius: 12px; overflow: hidden;}
 
-/* radio pills */
+/* tabs (on-theme if used) */
+.stTabs [data-baseweb="tab-list"] {gap: 4px; border-bottom: 1px solid rgba(224,168,46,0.16);}
+.stTabs [data-baseweb="tab"] {color: #9A948A; font-family: 'Space Grotesk', sans-serif;}
+.stTabs [aria-selected="true"] {color: #F4C95D !important;}
+.stTabs [data-baseweb="tab-highlight"] {background: linear-gradient(90deg, #F4C95D, #B8860B);}
+
+/* inputs + selects: dark glass with gold focus */
+div[data-baseweb="select"] > div, .stTextInput input {
+  border-radius: 10px !important; background: rgba(255,255,255,0.03) !important;
+  border-color: rgba(255,255,255,0.10) !important;}
+.stTextInput input:focus, div[data-baseweb="select"] > div:focus-within {
+  border-color: rgba(224,168,46,0.6) !important; box-shadow: 0 0 0 1px rgba(224,168,46,0.3);}
+.stTextInput input::placeholder {color: #9A948A;}
+
+/* radio pills: ghost glass, gold when active */
 div[role="radiogroup"] label {
-  background: #161b24; border: 1px solid #262d3b; border-radius: 999px;
-  padding: 4px 14px; margin-right: 8px; transition: border-color .15s;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 999px; padding: 4px 14px; margin-right: 8px;
+  transition: border-color .15s ease, background .15s ease;
 }
-div[role="radiogroup"] label:hover {border-color: #2dd4a7;}
+div[role="radiogroup"] label:hover {border-color: rgba(224,168,46,0.5);}
+div[role="radiogroup"] label:has(input:checked) {
+  border-color: rgba(224,168,46,0.65); background: rgba(224,168,46,0.09);}
+
+/* alerts: soften into the theme */
+div[data-testid="stAlert"] {border-radius: 12px;}
+
+/* dividers as gold hairlines */
+hr {border: none; border-top: 1px solid rgba(224,168,46,0.16); margin: 1.4rem 0;}
+
+/* map container framed like the cards */
+div[data-testid="stDeckGlJsonChart"] {
+  border: 1px solid rgba(224,168,46,0.16); border-radius: 14px; overflow: hidden;}
 
 /* why-ranked line */
-.why-rank {color: #7d879b; font-size: 0.82rem; margin: -4px 0 8px 2px;
-  border-left: 2px solid #2dd4a7; padding-left: 8px;}
+.why-rank {color: #9A948A; font-size: 0.82rem; margin: -4px 0 10px 2px;
+  border-left: 2px solid #E0A82E; padding-left: 10px;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -280,19 +365,21 @@ def why_ranked(r) -> str:
 
 # ---------- ui ----------
 st.markdown("""
-<div class="mimir-hero">
-  <div class="mimir-well"></div>
-  <div>
-    <div class="mimir-name">MIMIR</div>
-    <div class="mimir-tag">Intelligence you can trust</div>
+<div class="mimir-stage">
+  <div class="mimir-hero">
+    <div class="mimir-well"></div>
+    <div>
+      <div class="mimir-name">MIMIR</div>
+      <div class="mimir-tag">Intelligence you can trust</div>
+    </div>
   </div>
+  <p class="mimir-sub">
+    Can this facility actually do what it claims? Every verdict cites its evidence.
+    Missing data is reported, never punished -
+    <span style='color:#e6b34d;'>amber</span> means <i>we don't know</i>,
+    <span style='color:#e5484d;'>red</span> means <i>the data conflicts</i>.
+  </p>
 </div>
-<p class="mimir-sub">
-  Can this facility actually do what it claims? Every verdict cites its evidence.
-  Missing data is reported, never punished -
-  <span style='color:#e6b34d;'>amber</span> means <i>we don't know</i>,
-  <span style='color:#e05d5d;'>red</span> means <i>the data conflicts</i>.
-</p>
 """, unsafe_allow_html=True)
 
 regions = q(f"""SELECT DISTINCT region FROM (
@@ -345,9 +432,15 @@ n_c = cnt.get("Corroborated", 0)
 n_u = cnt.get("Unverified", 0)
 n_x = cnt.get("Contradicted", 0)
 m1, m2, m3 = st.columns(3)
-m1.metric("🟢 Corroborated", int(n_c))
-m2.metric("🟡 Unverified - no evidence either way", int(n_u))
-m3.metric("🔴 Contradicted - data conflicts", int(n_x))
+m1.markdown(f"""<div class="stat-card"><span class="pill pill-emerald">Corroborated</span>
+<div class="stat-num">{int(n_c)}</div>
+<div class="stat-sub">claims backed by the facility's own records</div></div>""", unsafe_allow_html=True)
+m2.markdown(f"""<div class="stat-card"><span class="pill pill-slate">Unverified</span>
+<div class="stat-num">{int(n_u)}</div>
+<div class="stat-sub">no evidence either way</div></div>""", unsafe_allow_html=True)
+m3.markdown(f"""<div class="stat-card"><span class="pill pill-red">Contradicted</span>
+<div class="stat-num">{int(n_x)}</div>
+<div class="stat-sub">the data conflicts - review first</div></div>""", unsafe_allow_html=True)
 
 # --- how the ranking works (transparent by design) ---
 with st.expander("⚖️ How this ranking works - no black box"):
@@ -406,7 +499,7 @@ if view_mode == "🗺️ Trust map":
     geo["radius"] = geo["verdict"].map({"Corroborated": 1200, "Unverified": 1200, "Contradicted": 1800})
 
     st.pydeck_chart(pdk.Deck(
-        map_style=None,
+        map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
         initial_view_state=pdk.ViewState(latitude=22.5, longitude=80.0, zoom=3.7),
         layers=[pdk.Layer(
             "ScatterplotLayer", data=geo,
