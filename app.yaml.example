@@ -1,0 +1,11 @@
+command: ["streamlit", "run", "app.py"]
+env:
+  - name: "DATABRICKS_WAREHOUSE_ID"
+    valueFrom: "sql-warehouse"
+  - name: "OPENAI_API_KEY"
+    value: "YOUR_OPENAI_API_KEY"
+
+  - name: "LAKEBASE_HOST"
+    value: "ep-snowy-cloud-d8u5kknt.database.us-east-2.cloud.databricks.com"
+  - name: "LAKEBASE_INSTANCE"
+    value: "trust-desk-db"
